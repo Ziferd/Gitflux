@@ -1,3 +1,9 @@
+
+---
+
+## 📄 File 3: `index.html`
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,25 +11,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Gitzen v5.5.1 — GitHub CLI Assistant</title>
+<title>Gitflux v6.0.0 — GitHub CLI Assistant</title>
 
 <!-- PRIMARY META -->
-<meta name="title" content="Gitzen v5.5.1 — GitHub CLI Assistant">
+<meta name="title" content="Gitflux v6.0.0 — GitHub CLI Assistant">
 <meta name="description"
 content="Powerful GitHub CLI Assistant for Termux &amp; Linux — 35+ Git &amp; GitHub operations in one modern CLI">
 <meta name="author" content="Ziferd">
 <!-- OPEN GRAPH / UNIVERSAL -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://gitzen.vercel.app/">
+<meta property="og:url" content="https://gitflux.vercel.app/">
 
 <meta property="og:title"
-content="Gitzen v5.5.1 — GitHub CLI Assistant for Termux">
+content="Gitflux v6.0.0 — GitHub CLI Assistant for Termux">
 
 <meta property="og:description"
 content="35+ GitHub operations in one modern CLI. Deploy, backup, and manage repos with a single command.">
 
 <meta property="og:image"
-content="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/banner.png">
+content="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/banner.png">
 
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
@@ -31,7 +37,7 @@ content="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/banner.png">
 <meta property="og:image:type" content="image/png">
 
 <meta property="og:site_name"
-content="Gitzen">
+content="Gitflux">
 
 <meta property="og:locale"
 content="en_US">
@@ -41,23 +47,23 @@ content="en_US">
 content="summary_large_image">
 
 <meta name="twitter:url"
-content="https://gitzen.vercel.app/">
+content="https://gitflux.vercel.app/">
 
 <meta name="twitter:title"
-content="Gitzen v5.5.1 — GitHub CLI Assistant">
+content="Gitflux v6.0.0 — GitHub CLI Assistant">
 
 <meta name="twitter:description"
 content="Modern GitHub CLI Assistant for Termux &amp; Linux. Deploy, backup, and manage repos with 35+ features.">
 
 <meta name="twitter:image"
-content="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/banner.png">
+content="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/banner.png">
 
 <!-- DISCORD EMBED COLOR -->
 <meta name="theme-color" content="#3fb950">
 
 <!-- FAVICON -->
 <link rel="icon"
-href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
+href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
 
 <style>
     :root {
@@ -69,6 +75,7 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
         --accent: #58a6ff;
         --accent-green: #3fb950;
         --accent-orange: #d2991d;
+        --accent-purple: #a371f7;
     }
 
     * {
@@ -150,8 +157,8 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
         color: var(--accent-orange);
     }
 
-    .hero h1 .zen {
-        color: var(--accent);
+    .hero h1 .flux {
+        color: var(--accent-purple);
     }
 
     .hero .tagline {
@@ -242,7 +249,7 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
 
     .terminal-preview .body .prompt { color: var(--accent-green); }
     .terminal-preview .body .cmd    { color: var(--accent); }
-    .terminal-preview .body .arg    { color: var(--accent-orange); }
+    .terminal-preview .body .arg    { color: var(--accent-purple); }
 
     .terminal-preview .body .output {
         color: var(--text-secondary);
@@ -356,9 +363,10 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
         margin-top: 1px;
     }
 
-    .tag-fix   { background: #1f3b2a; color: #3fb950; }
-    .tag-new   { background: #1a2f4a; color: #58a6ff; }
+    .tag-fix      { background: #1f3b2a; color: #3fb950; }
+    .tag-new      { background: #1a2f4a; color: #58a6ff; }
     .tag-improved { background: #2d2415; color: #d2991d; }
+    .tag-rebrand  { background: #2d1f4a; color: #a371f7; }
 
     /* ── Quick Install ───────────────────── */
     .install-section {
@@ -435,30 +443,30 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
     <!-- Header -->
     <header class="header">
         <div class="logo">
-            ⎔ Gitzen <span>v5.5.1</span>
+            ⎔ Gitflux <span>v6.0.0</span>
         </div>
         <nav class="links">
-            <a href="https://github.com/Ziferd/Gitzen" target="_blank">GitHub</a>
-            <a href="https://github.com/Ziferd/Gitzen#readme" target="_blank">Dokumentasi</a>
-            <a href="https://github.com/Ziferd/Gitzen/releases" target="_blank">Releases</a>
+            <a href="https://github.com/Ziferd/Gitflux" target="_blank">GitHub</a>
+            <a href="https://github.com/Ziferd/Gitflux#readme" target="_blank">Dokumentasi</a>
+            <a href="https://github.com/Ziferd/Gitflux/releases" target="_blank">Releases</a>
         </nav>
     </header>
 
     <!-- Hero -->
     <section class="hero">
         <h1>
-            <span class="git">Git</span><span class="zen">zen</span>
+            <span class="git">Git</span><span class="flux">flux</span>
         </h1>
         <p class="tagline">GitHub CLI Assistant untuk Termux & Linux — deploy, backup, kelola repo dalam satu perintah.</p>
         <div class="cta">
             <a href="#install" class="btn btn-primary">⬇ Quick Install</a>
-            <a href="https://github.com/Ziferd/Gitzen" target="_blank" class="btn btn-secondary">Lihat di GitHub</a>
+            <a href="https://github.com/Ziferd/Gitflux" target="_blank" class="btn btn-secondary">Lihat di GitHub</a>
         </div>
     </section>
 
     <!-- Badge strip -->
     <div class="badge-strip">
-        <div class="badge"><span class="dot-live"></span> v5.5.1 Stable</div>
+        <div class="badge"><span class="dot-live"></span> v6.0.0 Stable</div>
         <div class="badge">🔒 Input Validation</div>
         <div class="badge">🌐 Bilingual EN/ID</div>
         <div class="badge">📦 35+ Features</div>
@@ -471,10 +479,10 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
             <span class="dot red"></span>
             <span class="dot yellow"></span>
             <span class="dot green"></span>
-            <span style="color:#8b949e;font-size:0.8em;">Termux — gitzen</span>
+            <span style="color:#8b949e;font-size:0.8em;">Termux — gitflux</span>
         </div>
         <div class="body">
-            <span class="prompt">~ $</span> <span class="cmd">gitzen</span> <span class="arg">deploy</span> <span class="arg">"fix: bug login"</span><br>
+            <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">deploy</span> <span class="arg">"fix: bug login"</span><br>
             <div class="output">
                 [INFO] Deploy ke branch 'main'...<br>
                 [OK] File di-stage.<br>
@@ -484,21 +492,21 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
                 [OK] Deploy selesai.
             </div>
             <br>
-            <span class="prompt">~ $</span> <span class="cmd">gitzen</span> <span class="arg">backup</span><br>
+            <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">backup</span><br>
             <div class="output">
-                [INFO] Mem-backup semua repo ke '/home/gitzen-backups'...<br>
+                [INFO] Mem-backup semua repo ke '/home/gitflux-backups'...<br>
                 [OK] Backup selesai.
             </div>
             <br>
-            <span class="prompt">~ $</span> <span class="cmd">gitzen</span> <span class="arg">help</span><br>
+            <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">help</span><br>
             <div class="output">
-                Gitzen v5.5.1 — GitHub CLI Assistant<br>
+                Gitflux v6.0.0 — GitHub CLI Assistant<br>
                 Developer By: Ziferd<br>
                 &nbsp;<br>
                 Perintah Dasar:<br>
-                &nbsp;&nbsp;gitzen deploy  "pesan" [branch]   — Stage, commit, push<br>
-                &nbsp;&nbsp;gitzen push    [branch]           — Push ke remote<br>
-                &nbsp;&nbsp;gitzen pull    [branch]           — Pull dari remote<br>
+                &nbsp;&nbsp;gitflux deploy  "pesan" [branch]   — Stage, commit, push<br>
+                &nbsp;&nbsp;gitflux push    [branch]           — Push ke remote<br>
+                &nbsp;&nbsp;gitflux pull    [branch]           — Pull dari remote<br>
                 &nbsp;&nbsp;...
             </div>
         </div>
@@ -534,7 +542,7 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
         <div class="feature-card">
             <div class="icon">🌐</div>
             <h3>Bilingual (EN/ID)</h3>
-            <p>Dukung Bahasa Indonesia dan Inggris. Ganti dengan <code>export GITZEN_LANG=id</code>.</p>
+            <p>Dukung Bahasa Indonesia dan Inggris. Ganti dengan <code>export GITFLUX_LANG=id</code>.</p>
         </div>
     </section>
 
@@ -542,6 +550,10 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
     <section class="changelog-section">
         <h2>📋 Changelog</h2>
         <ul class="changelog-list">
+            <li>
+                <span class="tag tag-rebrand">REBRAND</span>
+                <span><strong>Gitzen → Gitflux.</strong> Nama baru, semangat baru. Semua referensi, env var (<code>GITFLUX_LANG</code>), lockfile (<code>/tmp/gitflux.lock</code>), SSH key (<code>id_ed25519_gitflux</code>), dan default backup folder (<code>~/gitflux-backups</code>) sudah diperbarui.</span>
+            </li>
             <li>
                 <span class="tag tag-fix">FIX</span>
                 <span>String hardcoded <code>"Commit dibatalkan"</code> dan <code>"tidak disetel"</code> di <code>cmd_sync</code> &amp; <code>cmd_status</code> diganti ke sistem bilingual <code>T_*</code>.</span>
@@ -574,10 +586,10 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
         <h2>⚡ Quick Install</h2>
         <div class="code-block">
             <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
-            curl -sL https://raw.githubusercontent.com/Ziferd/Gitzen/main/Gitzen.sh -o $PREFIX/bin/gitzen && chmod +x $PREFIX/bin/gitzen && gitzen setup
+            curl -sL https://raw.githubusercontent.com/Ziferd/Gitflux/main/Gitflux.sh -o $PREFIX/bin/gitflux && chmod +x $PREFIX/bin/gitflux && gitflux setup
         </div>
         <p style="margin-top:12px;color:var(--text-secondary);font-size:0.85em;">
-            Lalu ketik <code style="color:var(--accent);">gitzen help</code> untuk melihat semua perintah.
+            Lalu ketik <code style="color:var(--accent);">gitflux help</code> untuk melihat semua perintah.
         </p>
     </section>
 
@@ -585,10 +597,10 @@ href="https://raw.githubusercontent.com/Ziferd/Gitzen/main/thumb/icon.png">
     <footer class="footer">
         <p>
             Dibuat oleh <a href="https://github.com/Ziferd" target="_blank">Ziferd</a> •
-            Lisensi <a href="https://github.com/Ziferd/Gitzen/blob/main/LICENSE" target="_blank">MIT</a> •
-            <a href="https://github.com/Ziferd/Gitzen" target="_blank">GitHub</a>
+            Lisensi <a href="https://github.com/Ziferd/Gitflux/blob/main/LICENSE" target="_blank">MIT</a> •
+            <a href="https://github.com/Ziferd/Gitflux" target="_blank">GitHub</a>
         </p>
-        <p style="margin-top:6px;">© 2026 Gitzen. All rights reserved.</p>
+        <p style="margin-top:6px;">© 2026 Gitflux. All rights reserved.</p>
     </footer>
 
     <script>
