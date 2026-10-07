@@ -70,6 +70,10 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         --accent-green: #3fb950;
         --accent-orange: #d2991d;
         --accent-purple: #a371f7;
+        /* AA-safe fills untuk teks putih */
+        --btn-green: #238636;
+        --btn-green-hover: #1a7f37;
+        --btn-green-border: #2ea043;
     }
 
     * {
@@ -107,14 +111,16 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         gap: 8px;
     }
 
+    /* FIX #1: teks gelap di atas badge biru → 7.57:1 */
     .header .logo span {
         background: var(--accent);
-        color: #fff;
+        color: #0d1117;
         padding: 2px 8px;
         border-radius: 6px;
         font-size: 0.65em;
         letter-spacing: 0.5px;
         text-transform: uppercase;
+        font-weight: 800;
     }
 
     .header .links {
@@ -132,6 +138,7 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
 
     .header .links a:hover {
         color: var(--accent);
+        text-decoration: underline;
     }
 
     /* ── Hero ───────────────────── */
@@ -182,14 +189,16 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         border: 1px solid var(--border);
     }
 
+    /* FIX #2: kontras AA untuk teks putih di atas tombol hijau */
     .btn-primary {
-        background: var(--accent-green);
+        background: var(--btn-green);
         color: #fff;
-        border-color: var(--accent-green);
+        border-color: var(--btn-green-border);
     }
 
     .btn-primary:hover {
-        background: #2ea043;
+        background: var(--btn-green-hover);
+        border-color: var(--btn-green-hover);
     }
 
     .btn-secondary {
@@ -285,6 +294,16 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         max-width: 900px;
         margin: 0 auto 50px;
         padding: 0 24px;
+    }
+
+    /* FIX #4: heading h2 untuk menjaga urutan dokumen (h1 → h2 → h3) */
+    .features h2 {
+        font-size: 1.5em;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .features-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         gap: 16px;
@@ -357,10 +376,11 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         margin-top: 1px;
     }
 
-    .tag-fix      { background: #1f3b2a; color: #3fb950; }
-    .tag-new      { background: #1a2f4a; color: #58a6ff; }
-    .tag-improved { background: #2d2415; color: #d2991d; }
-    .tag-rebrand  { background: #2d1f4a; color: #a371f7; }
+    .tag-fix      { background: #1f3b2a; color: #3fb950; } /* 4.87:1 ✓ */
+    .tag-new      { background: #1a2f4a; color: #58a6ff; } /* 5.36:1 ✓ */
+    .tag-improved { background: #2d2415; color: #d2991d; } /* 6.11:1 ✓ */
+    /* FIX #6: rebrand color dinaikkan dari #a371f7 (4.41:1) ke #c9a0ff (7.03:1) */
+    .tag-rebrand  { background: #2d1f4a; color: #c9a0ff; }
 
     /* ── Quick Install ───────────────────── */
     .install-section {
@@ -416,13 +436,16 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         font-size: 0.82em;
     }
 
+    /* FIX #3: link tidak lagi bergantung warna saja — underline permanen */
     .footer a {
         color: var(--accent);
-        text-decoration: none;
+        text-decoration: underline;
+        text-underline-offset: 2px;
     }
 
     .footer a:hover {
         text-decoration: underline;
+        text-decoration-thickness: 2px;
     }
 
     /* ── Responsive ───────────────────── */
@@ -439,156 +462,164 @@ href="https://raw.githubusercontent.com/Ziferd/Gitflux/main/thumb/icon.png">
         <div class="logo">
             ⎔ Gitflux <span>v6.0.0</span>
         </div>
-        <nav class="links">
-            <a href="https://github.com/Ziferd/Gitflux" target="_blank">GitHub</a>
-            <a href="https://github.com/Ziferd/Gitflux#readme" target="_blank">Dokumentasi</a>
-            <a href="https://github.com/Ziferd/Gitflux/releases" target="_blank">Releases</a>
+        <nav class="links" aria-label="Navigasi utama">
+            <a href="https://github.com/Ziferd/Gitflux" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://github.com/Ziferd/Gitflux#readme" target="_blank" rel="noopener noreferrer">Dokumentasi</a>
+            <a href="https://github.com/Ziferd/Gitflux/releases" target="_blank" rel="noopener noreferrer">Releases</a>
         </nav>
     </header>
 
-    <!-- Hero -->
-    <section class="hero">
-        <h1>
-            <span class="git">Git</span><span class="flux">flux</span>
-        </h1>
-        <p class="tagline">GitHub CLI Assistant untuk Termux & Linux — deploy, backup, kelola repo dalam satu perintah.</p>
-        <div class="cta">
-            <a href="#install" class="btn btn-primary">⬇ Quick Install</a>
-            <a href="https://github.com/Ziferd/Gitflux" target="_blank" class="btn btn-secondary">Lihat di GitHub</a>
-        </div>
-    </section>
+    <!-- FIX #5: landmark <main> untuk konten utama -->
+    <main>
 
-    <!-- Badge strip -->
-    <div class="badge-strip">
-        <div class="badge"><span class="dot-live"></span> v6.0.0 Stable</div>
-        <div class="badge">🔒 Input Validation</div>
-        <div class="badge">🌐 Bilingual EN/ID</div>
-        <div class="badge">📦 35+ Features</div>
-        <div class="badge">🐧 Linux · macOS · Termux</div>
-    </div>
-
-    <!-- Terminal Preview -->
-    <div class="terminal-preview">
-        <div class="titlebar">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
-            <span style="color:#8b949e;font-size:0.8em;">Termux — gitflux</span>
-        </div>
-        <div class="body">
-            <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">deploy</span> <span class="arg">"fix: bug login"</span><br>
-            <div class="output">
-                [INFO] Deploy ke branch 'main'...<br>
-                [OK] File di-stage.<br>
-                [OK] Commit: fix: bug login<br>
-                [OK] Pull berhasil.<br>
-                [OK] Push berhasil.<br>
-                [OK] Deploy selesai.
+        <!-- Hero -->
+        <section class="hero">
+            <h1>
+                <span class="git">Git</span><span class="flux">flux</span>
+            </h1>
+            <p class="tagline">GitHub CLI Assistant untuk Termux &amp; Linux — deploy, backup, kelola repo dalam satu perintah.</p>
+            <div class="cta">
+                <a href="#install" class="btn btn-primary">⬇ Quick Install</a>
+                <a href="https://github.com/Ziferd/Gitflux" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Lihat di GitHub</a>
             </div>
-            <br>
-            <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">backup</span><br>
-            <div class="output">
-                [INFO] Mem-backup semua repo ke '/home/gitflux-backups'...<br>
-                [OK] Backup selesai.
+        </section>
+
+        <!-- Badge strip -->
+        <div class="badge-strip">
+            <div class="badge"><span class="dot-live"></span> v6.0.0 Stable</div>
+            <div class="badge">🔒 Input Validation</div>
+            <div class="badge">🌐 Bilingual EN/ID</div>
+            <div class="badge">📦 35+ Features</div>
+            <div class="badge">🐧 Linux · macOS · Termux</div>
+        </div>
+
+        <!-- Terminal Preview -->
+        <div class="terminal-preview" role="img" aria-label="Contoh keluaran terminal Gitflux: menjalankan deploy, backup, dan help">
+            <div class="titlebar" aria-hidden="true">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span style="color:#8b949e;font-size:0.8em;">Termux — gitflux</span>
             </div>
-            <br>
-            <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">help</span><br>
-            <div class="output">
-                Gitflux v6.0.0 — GitHub CLI Assistant<br>
-                Developer By: Ziferd<br>
-                &nbsp;<br>
-                Perintah Dasar:<br>
-                &nbsp;&nbsp;gitflux deploy  "pesan" [branch]   — Stage, commit, push<br>
-                &nbsp;&nbsp;gitflux push    [branch]           — Push ke remote<br>
-                &nbsp;&nbsp;gitflux pull    [branch]           — Pull dari remote<br>
-                &nbsp;&nbsp;...
+            <div class="body">
+                <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">deploy</span> <span class="arg">"fix: bug login"</span><br>
+                <div class="output">
+                    [INFO] Deploy ke branch 'main'...<br>
+                    [OK] File di-stage.<br>
+                    [OK] Commit: fix: bug login<br>
+                    [OK] Pull berhasil.<br>
+                    [OK] Push berhasil.<br>
+                    [OK] Deploy selesai.
+                </div>
+                <br>
+                <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">backup</span><br>
+                <div class="output">
+                    [INFO] Mem-backup semua repo ke '/home/gitflux-backups'...<br>
+                    [OK] Backup selesai.
+                </div>
+                <br>
+                <span class="prompt">~ $</span> <span class="cmd">gitflux</span> <span class="arg">help</span><br>
+                <div class="output">
+                    Gitflux v6.0.0 — GitHub CLI Assistant<br>
+                    Developer By: Ziferd<br>
+                    &nbsp;<br>
+                    Perintah Dasar:<br>
+                    &nbsp;&nbsp;gitflux deploy  "pesan" [branch]   — Stage, commit, push<br>
+                    &nbsp;&nbsp;gitflux push    [branch]           — Push ke remote<br>
+                    &nbsp;&nbsp;gitflux pull    [branch]           — Pull dari remote<br>
+                    &nbsp;&nbsp;...
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Features -->
-    <section class="features">
-        <div class="feature-card">
-            <div class="icon">🚀</div>
-            <h3>One-Command Deploy</h3>
-            <p>Stage, commit, pull rebase, dan push dalam satu baris perintah.</p>
-        </div>
-        <div class="feature-card">
-            <div class="icon">💾</div>
-            <h3>Backup Semua Repo</h3>
-            <p>Cadangkan seluruh repositori GitHub kamu ke folder lokal secara paralel.</p>
-        </div>
-        <div class="feature-card">
-            <div class="icon">⏪</div>
-            <h3>Undo Apapun</h3>
-            <p>Batalkan commit, pulihkan file, atau reset total dengan konfirmasi aman.</p>
-        </div>
-        <div class="feature-card">
-            <div class="icon">🔄</div>
-            <h3>Daemon Auto-Sync</h3>
-            <p>Sinkronisasi otomatis setiap N detik dengan PID lockfile agar tidak dobel.</p>
-        </div>
-        <div class="feature-card">
-            <div class="icon">🔒</div>
-            <h3>Input Validation</h3>
-            <p>Karakter berbahaya diblokir di semua command. Commit message tetap fleksibel.</p>
-        </div>
-        <div class="feature-card">
-            <div class="icon">🌐</div>
-            <h3>Bilingual (EN/ID)</h3>
-            <p>Dukung Bahasa Indonesia dan Inggris. Ganti dengan <code>export GITFLUX_LANG=id</code>.</p>
-        </div>
-    </section>
+        <!-- Features -->
+        <section class="features" aria-labelledby="features-heading">
+            <h2 id="features-heading">✨ Fitur Unggulan</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon" aria-hidden="true">🚀</div>
+                    <h3>One-Command Deploy</h3>
+                    <p>Stage, commit, pull rebase, dan push dalam satu baris perintah.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon" aria-hidden="true">💾</div>
+                    <h3>Backup Semua Repo</h3>
+                    <p>Cadangkan seluruh repositori GitHub kamu ke folder lokal secara paralel.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon" aria-hidden="true">⏪</div>
+                    <h3>Undo Apapun</h3>
+                    <p>Batalkan commit, pulihkan file, atau reset total dengan konfirmasi aman.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon" aria-hidden="true">🔄</div>
+                    <h3>Daemon Auto-Sync</h3>
+                    <p>Sinkronisasi otomatis setiap N detik dengan PID lockfile agar tidak dobel.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon" aria-hidden="true">🔒</div>
+                    <h3>Input Validation</h3>
+                    <p>Karakter berbahaya diblokir di semua command. Commit message tetap fleksibel.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon" aria-hidden="true">🌐</div>
+                    <h3>Bilingual (EN/ID)</h3>
+                    <p>Dukung Bahasa Indonesia dan Inggris. Ganti dengan <code>export GITFLUX_LANG=id</code>.</p>
+                </div>
+            </div>
+        </section>
 
-    <!-- Changelog -->
-    <section class="changelog-section">
-        <h2>📋 Changelog</h2>
-        <ul class="changelog-list">
-            <li>
-                <span class="tag tag-fix">FIX</span>
-                <span>String hardcoded <code>"Commit dibatalkan"</code> dan <code>"tidak disetel"</code> di <code>cmd_sync</code> &amp; <code>cmd_status</code> diganti ke sistem bilingual <code>T_*</code>.</span>
-            </li>
-            <li>
-                <span class="tag tag-improved">IMPROVED</span>
-                <span><code>validate_arg()</code> sekarang mengizinkan karakter <code>$</code> khusus untuk commit message, agar pesan seperti <code>"fix: update $PATH"</code> tidak diblokir.</span>
-            </li>
-            <li>
-                <span class="tag tag-new">NEW</span>
-                <span>Fungsi <code>validate_arg()</code> terpusat diterapkan di seluruh command — branch, tag, remote, PR, issue, config, dan lainnya.</span>
-            </li>
-            <li>
-                <span class="tag tag-fix">FIX</span>
-                <span><code>cmd_init</code> kini menggunakan <code>git -C</code> — tidak ada lagi masalah <code>cd</code> dalam subshell.</span>
-            </li>
-            <li>
-                <span class="tag tag-fix">FIX</span>
-                <span><code>fail()</code> sekarang output ke <code>stderr</code> (<code>&gt;&amp;2</code>) agar error tidak tercampur dengan stdout.</span>
-            </li>
-            <li>
-                <span class="tag tag-improved">IMPROVED</span>
-                <span>Daemon menggunakan PID-based lockfile — mencegah instance ganda bahkan setelah crash.</span>
-            </li>
-        </ul>
-    </section>
+        <!-- Changelog -->
+        <section class="changelog-section" aria-labelledby="changelog-heading">
+            <h2 id="changelog-heading">📋 Changelog</h2>
+            <ul class="changelog-list">
+                <li>
+                    <span class="tag tag-fix">FIX</span>
+                    <span>String hardcoded <code>"Commit dibatalkan"</code> dan <code>"tidak disetel"</code> di <code>cmd_sync</code> &amp; <code>cmd_status</code> diganti ke sistem bilingual <code>T_*</code>.</span>
+                </li>
+                <li>
+                    <span class="tag tag-improved">IMPROVED</span>
+                    <span><code>validate_arg()</code> sekarang mengizinkan karakter <code>$</code> khusus untuk commit message, agar pesan seperti <code>"fix: update $PATH"</code> tidak diblokir.</span>
+                </li>
+                <li>
+                    <span class="tag tag-new">NEW</span>
+                    <span>Fungsi <code>validate_arg()</code> terpusat diterapkan di seluruh command — branch, tag, remote, PR, issue, config, dan lainnya.</span>
+                </li>
+                <li>
+                    <span class="tag tag-fix">FIX</span>
+                    <span><code>cmd_init</code> kini menggunakan <code>git -C</code> — tidak ada lagi masalah <code>cd</code> dalam subshell.</span>
+                </li>
+                <li>
+                    <span class="tag tag-fix">FIX</span>
+                    <span><code>fail()</code> sekarang output ke <code>stderr</code> (<code>&gt;&amp;2</code>) agar error tidak tercampur dengan stdout.</span>
+                </li>
+                <li>
+                    <span class="tag tag-improved">IMPROVED</span>
+                    <span>Daemon menggunakan PID-based lockfile — mencegah instance ganda bahkan setelah crash.</span>
+                </li>
+            </ul>
+        </section>
 
-    <!-- Quick Install -->
-    <section id="install" class="install-section">
-        <h2>⚡ Quick Install</h2>
-        <div class="code-block">
-            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
-            curl -sL https://raw.githubusercontent.com/Ziferd/Gitflux/main/Gitflux.sh -o $PREFIX/bin/gitflux && chmod +x $PREFIX/bin/gitflux && gitflux setup
-        </div>
-        <p style="margin-top:12px;color:var(--text-secondary);font-size:0.85em;">
-            Lalu ketik <code style="color:var(--accent);">gitflux help</code> untuk melihat semua perintah.
-        </p>
-    </section>
+        <!-- Quick Install -->
+        <section id="install" class="install-section" aria-labelledby="install-heading">
+            <h2 id="install-heading">⚡ Quick Install</h2>
+            <div class="code-block">
+                <button class="copy-btn" type="button" onclick="copyToClipboard(this)" aria-label="Salin perintah instalasi">Copy</button>
+                <code>curl -sL https://raw.githubusercontent.com/Ziferd/Gitflux/main/Gitflux.sh -o $PREFIX/bin/gitflux &amp;&amp; chmod +x $PREFIX/bin/gitflux &amp;&amp; gitflux setup</code>
+            </div>
+            <p style="margin-top:12px;color:var(--text-secondary);font-size:0.85em;">
+                Lalu ketik <code style="color:var(--accent);">gitflux help</code> untuk melihat semua perintah.
+            </p>
+        </section>
+
+    </main>
 
     <!-- Footer -->
     <footer class="footer">
         <p>
-            Dibuat oleh <a href="https://github.com/Ziferd" target="_blank">Ziferd</a> •
-            Lisensi <a href="https://github.com/Ziferd/Gitflux/blob/main/LICENSE" target="_blank">MIT</a> •
-            <a href="https://github.com/Ziferd/Gitflux" target="_blank">GitHub</a>
+            Dibuat oleh <a href="https://github.com/Ziferd" target="_blank" rel="noopener noreferrer">Ziferd</a> •
+            Lisensi <a href="https://github.com/Ziferd/Gitflux/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a> •
+            <a href="https://github.com/Ziferd/Gitflux" target="_blank" rel="noopener noreferrer">GitHub</a>
         </p>
         <p style="margin-top:6px;">© 2026 Gitflux. All rights reserved.</p>
     </footer>
