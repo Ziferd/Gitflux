@@ -7,7 +7,6 @@
 set -euo pipefail
 
 GITFLUX_LANG="${GITFLUX_LANG:-en}"
-LOCKFILE="${TMPDIR:-/tmp}/gitflux.lock"
 VERSION="6.0.0"
 
 # ==================== BILINGUAL MESSAGES ====================
@@ -98,7 +97,7 @@ if [ "$GITFLUX_LANG" = "id" ]; then
 
   # Squash
   T_SQUASH_DONE="Squash selesai."
-  T_SQUASH_INVALID_N="Jumlah commit harus bilangan positif."
+  T_SQUASH_INVALID_N="Jumlah commit harus bilangan bulat minimal 2."
   T_SQUASH_TOO_LARGE="Jumlah commit melebihi total commit yang ada."
 
   # Rebase
@@ -258,7 +257,7 @@ else
   T_RESET_HARD_CONFIRM="Hard reset will discard changes. Are you sure?"
 
   T_SQUASH_DONE="Squash complete."
-  T_SQUASH_INVALID_N="Number of commits must be a positive integer."
+  T_SQUASH_INVALID_N="Number of commits must be an integer of at least 2."
   T_SQUASH_TOO_LARGE="Number of commits exceeds total commits."
 
   T_REBASE_DONE="Rebase complete."
@@ -331,10 +330,56 @@ else
   T_LOGIN_PROMPT="Please login to GitHub:"
 fi
 
+# ==================== EXTRA MESSAGES ====================
+if [ "$GITFLUX_LANG" = "id" ]; then
+  T_INVALID_CHARS="Karakter tidak valid terdeteksi di %s."
+  T_NO_ORIGIN="Remote 'origin' belum disetel. Jalankan: gitflux remote add origin <url>"
+  T_REBASE_IN_PROGRESS="Rebase/merge sedang berlangsung. Selesaikan dulu (--continue / --abort)."
+  T_BRANCH_MISMATCH="Branch '%s' bukan branch aktif ('%s'). Pindah dulu: gitflux branch switch %s"
+  T_SENSITIVE_WARN="File sensitif terdeteksi di staging:%s"
+  T_NEED_TOOL="Perintah '%s' tidak ditemukan. Jalankan: gitflux setup"
+  T_NEED_GH_AUTH="Belum login GitHub. Jalankan: gh auth login"
+  T_BAD_NUMBER="Harus berupa angka positif."
+  T_BAD_URL="URL tidak valid atau tidak diizinkan."
+  T_BAD_REF="Nama/ref tidak valid"
+  T_KEY_NOT_ALLOWED="Kunci konfigurasi '%s' tidak diizinkan."
+  T_KEY_EXISTS="Kunci '%s' sudah ada. Tidak ditimpa."
+  T_BACKUP_FAILED="Backup gagal untuk %s repo."
+  T_DIRTY="Working tree tidak bersih. Commit atau stash dulu."
+  T_BAD_INTERVAL="Interval harus berupa angka positif (detik)."
+  T_STATS_TOP="Kontributor teratas:"
+  T_NEED_TARGET="Reset hard memerlukan target eksplisit (mis. HEAD~1)."
+  T_FILE_NOT_FOUND="File tidak ditemukan: %s"
+  T_SENSITIVE_REFUSE="Ditolak: '%s' tampak sebagai file sensitif."
+  T_MERGE_FAIL="Merge gagal."
+else
+  T_INVALID_CHARS="Invalid characters detected in %s."
+  T_NO_ORIGIN="Remote 'origin' is not set. Run: gitflux remote add origin <url>"
+  T_REBASE_IN_PROGRESS="A rebase/merge is in progress. Finish it first (--continue / --abort)."
+  T_BRANCH_MISMATCH="Branch '%s' is not the current branch ('%s'). Switch first: gitflux branch switch %s"
+  T_SENSITIVE_WARN="Sensitive files detected in staging:%s"
+  T_NEED_TOOL="Command '%s' not found. Run: gitflux setup"
+  T_NEED_GH_AUTH="Not logged into GitHub. Run: gh auth login"
+  T_BAD_NUMBER="Must be a positive number."
+  T_BAD_URL="Invalid or disallowed URL."
+  T_BAD_REF="Invalid name/ref"
+  T_KEY_NOT_ALLOWED="Config key '%s' is not allowed."
+  T_KEY_EXISTS="Key '%s' already exists. Not overwriting."
+  T_BACKUP_FAILED="Backup failed for %s repo(s)."
+  T_DIRTY="Working tree is not clean. Commit or stash first."
+  T_BAD_INTERVAL="Interval must be a positive integer (seconds)."
+  T_STATS_TOP="Top contributors:"
+  T_NEED_TARGET="Hard reset requires an explicit target (e.g. HEAD~1)."
+  T_FILE_NOT_FOUND="File not found: %s"
+  T_SENSITIVE_REFUSE="Refused: '%s' looks like a sensitive file."
+  T_MERGE_FAIL="Merge failed."
+fi
+
 # ==================== UI FUNCTIONS ====================
 info()  { echo "[INFO] $*"; }
 ok()    { echo "[OK] $*"; }
 fail()  { echo "[FAIL] $*" >&2; }
+warn()  { echo "[WARN] $*" >&2; }
 
 banner() {
     echo ""
@@ -346,73 +391,143 @@ banner() {
 }
 
 # ==================== SAFETY WRAPPERS ====================
+# Pass-through: stdout/stderr & TTY tetap utuh (prompt interaktif git/gh jalan).
 run_git() {
-  local output
-  output="$(git "$@" 2>&1)" && return 0
-  fail "Git command failed: git $*"
-  if [ -n "$output" ]; then
-    echo "$output" >&2
-  fi
-  return 1
+    local rc=0
+    git "$@" || rc=$?
+    [ "$rc" -eq 0 ] || fail "Git command failed (exit $rc): git $*"
+    return "$rc"
 }
 
 run_gh() {
-  local output
-  output="$(gh "$@" 2>&1)" && return 0
-  fail "GitHub CLI failed: gh $*"
-  if [ -n "$output" ]; then
-    echo "$output" >&2
-  fi
-  return 1
+    local rc=0
+    gh "$@" || rc=$?
+    [ "$rc" -eq 0 ] || fail "GitHub CLI failed (exit $rc): gh $*"
+    return "$rc"
 }
 
+# Sembunyikan kredensial di URL (https://user:token@host -> https://***@host)
+mask_url() { sed -E 's#(://)[^/@[:space:]]+@#\1***@#g'; }
+
 # ==================== INPUT VALIDATION ====================
-# Mencegah karakter berbahaya untuk argumen yang digunakan di command Git/GitHub
-# PENGECUALIAN: untuk commit message, izinkan $ karena common di pesan commit
-validate_arg() {
-    local val="$1"
-    local context="${2:-arg}"
-    if [ "$context" = "commit message" ]; then
-        # Izinkan $ tapi blokir karakter berbahaya lainnya
-        if [[ "$val" =~ [\;\&\|\`\(\)\{\}\[\]\<\>\n\r\t] ]]; then
-            fail "Karakter berbahaya terdeteksi di $context."
-            return 1
-        fi
-    else
-        if [[ "$val" =~ [\;\&\|\$\`\(\)\{\}\[\]\<\>\n\r\t] ]]; then
-            fail "Karakter berbahaya terdeteksi di $context."
-            return 1
-        fi
+# Argumen selalu di-quote (tidak ada eval), jadi metakarakter shell bukan ancaman.
+# Ancaman nyata: injeksi opsi (-x/--x), URL transport 'ext::', dan nilai kontrol.
+
+RE_REPO='^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$'
+RE_REPO_FULL='^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$'
+RE_NAME='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+
+# Teks bebas (pesan commit, judul issue/PR, dsb.): tolak karakter kontrol.
+validate_text() {
+    local val="$1" ctx="${2:-text}" multiline="${3:-no}"
+    if [ "$multiline" = "yes" ]; then val="${val//$'\n'/}"; fi
+    if [[ "$val" == *[[:cntrl:]]* ]]; then
+        fail "$(printf "$T_INVALID_CHARS" "$ctx")"
+        return 1
+    fi
+}
+
+validate_number() {
+    [[ "${1:-}" =~ ^[0-9]+$ ]] || { fail "$T_BAD_NUMBER"; return 1; }
+}
+
+validate_id() {
+    [[ "${1:-}" =~ ^[A-Za-z0-9]+$ ]] || { fail "$T_INVALID_INPUT"; return 1; }
+}
+
+validate_branch_name() {
+    local v="${1:-}"
+    if [ -z "$v" ] || [[ "$v" == -* ]] || ! git check-ref-format --branch "$v" >/dev/null 2>&1; then
+        fail "$T_BAD_REF: $v"
+        return 1
+    fi
+}
+
+validate_tag_name() {
+    local t="${1:-}"
+    if [ -z "$t" ] || [[ "$t" == -* ]] || ! git check-ref-format "refs/tags/$t" >/dev/null 2>&1; then
+        fail "$T_TAG_INVALID_NAME"
+        return 1
+    fi
+}
+
+# Commit-ish yang harus ada (HEAD~1, HEAD@{1}, origin/main, hash...)
+validate_rev() {
+    local v="${1:-}"
+    if [ -z "$v" ] || [[ "$v" == -* ]] || [[ "$v" == *[[:cntrl:][:space:]]* ]] \
+       || ! git rev-parse --verify --quiet "${v}^{commit}" >/dev/null 2>&1; then
+        fail "$T_BAD_REF: $v"
+        return 1
+    fi
+}
+
+validate_remote_name() {
+    [[ "${1:-}" =~ $RE_NAME ]] || { fail "$T_INVALID_INPUT"; return 1; }
+}
+
+# Hanya https://, ssh://, dan scp-like git@host:path. 'ext::', 'file:' dll. ditolak.
+validate_url() {
+    local u="${1:-}"
+    case "$u" in
+        https://*|ssh://*|git@*:*) ;;
+        *) fail "$T_BAD_URL"; return 1 ;;
+    esac
+    case "$u" in
+        *[[:space:]]*|*[[:cntrl:]]*|*'"'*|*"'"*|*'\'*|*'`'*|*'$'*|*';'*|*'|'*|*'&'*|*'<'*|*'>'*)
+            fail "$T_BAD_URL"; return 1 ;;
+    esac
+}
+
+is_sensitive() {
+    case "${1##*/}" in
+        .env|.env.*|*.pem|*.key|*.p12|*.pfx|*.kdbx|.netrc|.npmrc|id_rsa|id_rsa.*|id_ed25519|id_ed25519.*|id_ecdsa|id_ecdsa.*|credentials*|*secret*)
+            return 0 ;;
+    esac
+    return 1
+}
+
+warn_sensitive_staged() {
+    local f hits=""
+    while IFS= read -r -d '' f; do
+        if is_sensitive "$f"; then hits="$hits $f"; fi
+    done < <(git diff --cached --name-only -z --diff-filter=AM)
+    if [ -n "$hits" ]; then
+        warn "$(printf "$T_SENSITIVE_WARN" "$hits")"
+        return 1
     fi
     return 0
 }
 
 confirm() {
-    local prompt="${1:-$T_CONFIRM}"
-    local ans
-    read -rp "$prompt $T_YES_NO " ans
-    [[ "$ans" =~ ^[Yy]$ ]]
+    local prompt="${1:-$T_CONFIRM}" ans
+    read -rp "$prompt $T_YES_NO " ans || return 1
+    [[ "$ans" =~ ^([Yy]|[Yy][Ee][Ss]|[Yy][Aa])$ ]]
 }
 
 # ==================== ENVIRONMENT DETECTION ====================
-is_termux() { [ -n "${TERMUX_VERSION:-}" ]; }
+is_termux() { [ -n "${TERMUX_VERSION:-}" ] || [[ "${PREFIX:-}" == *com.termux* ]]; }
+
 detect_os() {
     local os="unknown"
     case "$(uname -s)" in
-        Linux)
-            if is_termux; then os="termux"
-            else os="linux"
-            fi ;;
+        Linux)  if is_termux; then os="termux"; else os="linux"; fi ;;
         Darwin) os="macos" ;;
-        MINGW64_NT*|MSYS_NT*|CYGWIN_NT*) os="windows" ;;
+        MINGW*|MSYS*|CYGWIN*) os="windows" ;;
     esac
     echo "$os"
 }
 OS="$(detect_os)"
 
+check_git() {
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+        fail "$T_NOT_GIT_REPO"
+        return 1
+    fi
+}
+
 get_branch() {
     local branch
-    branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+    branch="$(git symbolic-ref --short -q HEAD 2>/dev/null || true)"
     if [ -z "$branch" ]; then
         fail "$T_DETACHED_HEAD"
         return 1
@@ -420,44 +535,45 @@ get_branch() {
     echo "$branch"
 }
 
-# ==================== DEPENDENCY INSTALLER ====================
-install_deps() {
-    local pkgs=("git" "gh" "jq" "curl" "openssh")
-
-    info "Detecting package manager & installing dependencies..."
-
-    if is_termux; then
-        pkg update -y -qq && pkg upgrade -y -qq
-        pkg install -y "${pkgs[@]}"
-    elif command -v apt >/dev/null; then
-        sudo apt update -qq && sudo apt install -y "${pkgs[@]}"
-    elif command -v pacman >/dev/null; then
-        sudo pacman -Syu --noconfirm "${pkgs[@]}"
-    elif command -v brew >/dev/null; then
-        brew install "${pkgs[@]}"
-    elif command -v dnf >/dev/null; then
-        sudo dnf install -y "${pkgs[@]}"
-    else
-        fail "Unsupported package manager. Install manually: ${pkgs[*]}"
-        return 1
+# [branch] opsional: harus sama dengan branch aktif (tidak lagi diabaikan diam-diam)
+resolve_branch() {
+    local cur req="${1:-}"
+    cur="$(get_branch)" || return 1
+    if [ -n "$req" ]; then
+        validate_branch_name "$req" || return 1
+        if [ "$req" != "$cur" ]; then
+            fail "$(printf "$T_BRANCH_MISMATCH" "$req" "$cur" "$req")"
+            return 1
+        fi
     fi
-    ok "Dependencies installed."
-
-    if ! gh auth status &>/dev/null; then
-        info "$T_LOGIN_PROMPT"
-        gh auth login
-    else
-        ok "$T_ALREADY_LOGIN"
-    fi
-    ok "$T_SETUP_DONE"
+    echo "$cur"
 }
 
-# ==================== VALIDATION ====================
+check_origin() {
+    git remote get-url origin >/dev/null 2>&1 || { fail "$T_NO_ORIGIN"; return 1; }
+}
+
+rebase_in_progress() {
+    [ -d "$(git rev-parse --git-path rebase-merge)" ] \
+        || [ -d "$(git rev-parse --git-path rebase-apply)" ] \
+        || [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || { fail "$(printf "$T_NEED_TOOL" "$1")"; return 1; }
+}
+
+need_gh() {
+    need gh || return 1
+    gh auth status >/dev/null 2>&1 || { fail "$T_NEED_GH_AUTH"; return 1; }
+}
+
+# ==================== DEPENDENCY INSTALLER ====================
 check_deps() {
-    local deps=("git" "gh" "jq" "curl" "ssh-keygen")
-    local missing=()
+    local deps=("git" "gh" "curl" "ssh-keygen")   # jq dihapus: tidak dipakai
+    local missing=() dep
     for dep in "${deps[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then missing+=("$dep"); fi
+        command -v "$dep" &>/dev/null || missing+=("$dep")
     done
     if [ ${#missing[@]} -eq 0 ]; then
         ok "$T_DEPENDENCIES_OK"
@@ -468,64 +584,140 @@ check_deps() {
     fi
 }
 
-check_git() {
-    if ! git rev-parse --is-inside-work-tree &> /dev/null; then
-        fail "$T_NOT_GIT_REPO"
+install_deps() {
+    local SUDO=""
+    info "Detecting package manager & installing dependencies..."
+
+    if [ "$OS" = "windows" ]; then
+        fail "Windows: install Git for Windows, GitHub CLI and OpenSSH via winget/scoop."
         return 1
     fi
-    return 0
+
+    if ! is_termux && [ "$(id -u)" -ne 0 ]; then
+        if command -v sudo >/dev/null 2>&1; then SUDO="sudo"
+        else fail "Root or sudo is required."; return 1
+        fi
+    fi
+
+    if is_termux; then
+        pkg update -y && pkg install -y git gh curl openssh
+    elif command -v apt-get >/dev/null 2>&1; then
+        $SUDO apt-get update -qq
+        $SUDO apt-get install -y git curl openssh-client
+        $SUDO apt-get install -y gh || info "gh not in your apt repos: https://github.com/cli/cli/blob/trunk/docs/install_linux.md"
+    elif command -v pacman >/dev/null 2>&1; then
+        $SUDO pacman -S --needed --noconfirm git github-cli curl openssh
+    elif command -v brew >/dev/null 2>&1; then
+        brew install git gh curl openssh
+    elif command -v dnf >/dev/null 2>&1; then
+        $SUDO dnf install -y git gh curl openssh-clients
+    else
+        fail "Unsupported package manager. Install manually: git gh curl openssh"
+        return 1
+    fi
+    ok "Dependencies installed."
+
+    check_deps || return 1
+
+    if ! gh auth status &>/dev/null; then
+        info "$T_LOGIN_PROMPT"
+        gh auth login
+    else
+        ok "$T_ALREADY_LOGIN"
+    fi
+    ok "$T_SETUP_DONE"
 }
 
 # ==================== CORE COMMANDS ====================
-cmd_deploy() {
-    local message="${1:-"deploy: $(date)"}"
-    local branch; branch="$(get_branch)" || return 1
-    check_git || return 1
-    validate_arg "$message" "commit message" || return 1
+# stage + commit. Return 0 jika commit sukses / tidak ada perubahan; 1 jika gagal/dibatalkan.
+stage_and_commit() {
+    local msg="$1" interactive="${2:-yes}"
+    run_git add -A || { fail "$T_FILE_STAGE_FAILED"; return 1; }
+    ok "$T_FILE_STAGED"
 
-    info "$T_DEPLOY_START '$branch'..."
-    run_git add -A && ok "$T_FILE_STAGED" || fail "$T_FILE_STAGE_FAILED"
-
-    if git diff --cached --quiet 2>/dev/null; then
+    if git diff --cached --quiet; then
         info "$T_NO_CHANGES"
-    else
-        run_git commit -m "$message" && ok "$T_COMMIT_OK $message" || fail "$T_COMMIT_FAILED"
+        return 0
     fi
 
+    if ! warn_sensitive_staged; then
+        if [ "$interactive" != "yes" ] || ! confirm; then
+            git reset -q 2>/dev/null || true
+            fail "$T_CANCEL"
+            return 1
+        fi
+    fi
+
+    run_git commit -m "$msg" || { fail "$T_COMMIT_FAILED"; return 1; }
+    ok "$T_COMMIT_OK $msg"
+}
+
+# pull --rebase. Branch remote belum ada = lewati (OK). Konflik/error = gagal (return 1).
+pull_rebase() {
+    local branch="$1" rc=0
     info "$T_PULL_INFO"
-    git pull origin "$branch" --rebase && ok "$T_PULL_OK" || info "$T_PULL_SKIP"
+    git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -eq 2 ]; then info "$T_PULL_SKIP"; return 0; fi
+    if [ "$rc" -ne 0 ]; then fail "$T_PULL_ERROR"; return 1; fi
+    if git pull --rebase origin "$branch"; then
+        ok "$T_PULL_OK"
+    else
+        fail "$T_PULL_ERROR"
+        return 1
+    fi
+}
+
+cmd_deploy() {
+    check_git || return 1
+    local message="${1:-deploy: $(date '+%F %T')}"
+    local branch; branch="$(resolve_branch "${2:-}")" || return 1
+    validate_text "$message" "commit message" yes || return 1
+    check_origin || return 1
+    if rebase_in_progress; then fail "$T_REBASE_IN_PROGRESS"; return 1; fi
+
+    info "$T_DEPLOY_START '$branch'..."
+    stage_and_commit "$message" || return 1
+    pull_rebase "$branch" || return 1
 
     info "$T_PUSH_INFO"
-    run_git push origin "$branch" && ok "$T_PUSH_OK" || fail "$T_PUSH_FAILED"
+    run_git push -u origin "$branch" || { fail "$T_PUSH_FAILED"; return 1; }
+    ok "$T_PUSH_OK"
     ok "$T_DEPLOY_DONE"
 }
 
 cmd_push() {
-    local branch; branch="$(get_branch)" || return 1
     check_git || return 1
-    run_git push origin "$branch" && ok "$(printf "$T_PUSH_SUCCESS" "$branch")" || fail "$T_PUSH_ERROR"
+    local branch; branch="$(resolve_branch "${1:-}")" || return 1
+    check_origin || return 1
+    if run_git push -u origin "$branch"; then
+        ok "$(printf "$T_PUSH_SUCCESS" "$branch")"
+    else
+        fail "$T_PUSH_ERROR"; return 1
+    fi
 }
 
 cmd_pull() {
-    local branch; branch="$(get_branch)" || return 1
     check_git || return 1
-    run_git pull origin "$branch" && ok "$(printf "$T_PULL_SUCCESS" "$branch")" || fail "$T_PULL_ERROR"
+    local branch; branch="$(resolve_branch "${1:-}")" || return 1
+    check_origin || return 1
+    if run_git pull origin "$branch"; then
+        ok "$(printf "$T_PULL_SUCCESS" "$branch")"
+    else
+        fail "$T_PULL_ERROR"; return 1
+    fi
 }
 
+# Urutan benar: commit lokal -> pull --rebase -> push
 cmd_sync() {
-    local branch; branch="$(get_branch)" || return 1
     check_git || return 1
-    info "$T_PULL_INFO"
-    git pull origin "$branch" --rebase && ok "$T_PULL_OK" || info "$T_PULL_SKIP"
+    local branch; branch="$(resolve_branch "${1:-}")" || return 1
+    check_origin || return 1
+    if rebase_in_progress; then fail "$T_REBASE_IN_PROGRESS"; return 1; fi
 
-    run_git add -A
-    if ! git diff --cached --quiet 2>/dev/null; then
-        run_git commit -m "sync: $(date)" || info "$T_COMMIT_CANCELLED"
-    else
-        info "$T_NO_CHANGES"
-    fi
-
-    run_git push origin "$branch" && ok "$T_PUSH_OK" || fail "$T_PUSH_FAILED"
+    stage_and_commit "sync: $(date '+%F %T')" "${GITFLUX_INTERACTIVE:-yes}" || return 1
+    pull_rebase "$branch" || return 1
+    run_git push -u origin "$branch" || { fail "$T_PUSH_FAILED"; return 1; }
+    ok "$T_PUSH_OK"
     ok "$T_SYNC_OK"
 }
 
@@ -533,118 +725,153 @@ cmd_status() {
     check_git || return 1
     git status
     echo ""
-    info "Branch: $(get_branch)"
-    info "Remote: $(git remote get-url origin 2>/dev/null || echo "$T_REMOTE_NOT_SET")"
+    local url b
+    b="$(git symbolic-ref --short -q HEAD 2>/dev/null || echo '(detached)')"
+    url="$(git remote get-url origin 2>/dev/null | mask_url)" || url=""
+    [ -n "$url" ] || url="$T_REMOTE_NOT_SET"
+    info "Branch: $b"
+    info "Remote: $url"
 }
 
 cmd_log() { check_git || return 1; git log --oneline --graph --decorate --all -20; }
-cmd_diff() { check_git || return 1; git diff "${1:-HEAD}"; }
+
+cmd_diff() {
+    check_git || return 1
+    local rev="${1:-HEAD}"
+    validate_rev "$rev" || return 1
+    git diff "$rev" --
+}
 
 cmd_stash() {
     check_git || return 1
     case "${1:-list}" in
         list) git stash list ;;
-        save) validate_arg "${2:-}" "stash message" || return 1
-              run_git stash push -m "${2:-"stash: $(date)"}" && ok "$T_STASH_SAVED" ;;
+        save) local msg="${2:-stash: $(date '+%F %T')}"
+              validate_text "$msg" "stash message" || return 1
+              run_git stash push --include-untracked -m "$msg" && ok "$T_STASH_SAVED" ;;
         pop)  run_git stash pop && ok "$T_STASH_POPPED" ;;
-        drop) run_git stash drop "${2:-0}" && ok "$T_STASH_DROPPED" ;;
-        *)    fail "$T_USAGE_STASH" ;;
+        drop) local n="${2:-0}"
+              validate_number "$n" || return 1
+              confirm || { fail "$T_CANCEL"; return 1; }
+              run_git stash drop "stash@{$n}" && ok "$T_STASH_DROPPED" ;;
+        *)    fail "$T_USAGE_STASH"; return 1 ;;
     esac
 }
 
 cmd_tag() {
     check_git || return 1
+    local t="${2:-}"
     case "${1:-list}" in
         list)   git tag -l ;;
-        create) local t="$2"
-                [ -z "$t" ] && { fail "$T_TAG_NAME_REQUIRED"; return 1; }
-                validate_arg "$t" "tag name" || return 1
+        create) [ -n "$t" ] || { fail "$T_TAG_NAME_REQUIRED"; return 1; }
+                validate_tag_name "$t" || return 1
                 run_git tag "$t" && ok "$(printf "$T_TAG_CREATED" "$t")" ;;
-        push)   run_git push --tags && ok "$T_TAG_PUSHED" ;;
-        delete) local t="$2"
-                [ -z "$t" ] && { fail "$T_TAG_NAME_REQUIRED"; return 1; }
-                validate_arg "$t" "tag name" || return 1
-                run_git tag -d "$t" 2>/dev/null && run_git push origin --delete "$t" 2>/dev/null
-                ok "$(printf "$T_TAG_DELETED" "$t")" ;;
-        *)      fail "$T_USAGE_TAG" ;;
+        push)   check_origin || return 1
+                run_git push origin --tags && ok "$T_TAG_PUSHED" ;;
+        delete) [ -n "$t" ] || { fail "$T_TAG_NAME_REQUIRED"; return 1; }
+                validate_tag_name "$t" || return 1
+                confirm || { fail "$T_CANCEL"; return 1; }
+                local rc=0
+                if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then
+                    run_git tag -d "$t" || rc=1
+                fi
+                if git remote get-url origin >/dev/null 2>&1 \
+                   && git ls-remote --exit-code --tags origin "refs/tags/$t" >/dev/null 2>&1; then
+                    run_git push origin --delete "refs/tags/$t" || rc=1
+                fi
+                if [ "$rc" -eq 0 ]; then ok "$(printf "$T_TAG_DELETED" "$t")"; else return 1; fi ;;
+        *)      fail "$T_USAGE_TAG"; return 1 ;;
     esac
 }
 
 cmd_remote() {
     check_git || return 1
+    local name="${2:-}" url="${3:-}"
     case "${1:-show}" in
-        show)   git remote -v ;;
-        add)    [ -z "$3" ] && { fail "$T_USAGE_REMOTE"; return 1; }
-                validate_arg "$2" "remote name" || return 1
-                validate_arg "$3" "remote URL" || return 1
-                run_git remote add "$2" "$3" && ok "$(printf "$T_REMOTE_ADDED" "$2")" ;;
-        set)    [ -z "$3" ] && { fail "$T_USAGE_REMOTE"; return 1; }
-                validate_arg "$2" "remote name" || return 1
-                validate_arg "$3" "remote URL" || return 1
-                run_git remote set-url "$2" "$3" && ok "$(printf "$T_REMOTE_UPDATED" "$2")" ;;
-        delete) [ -z "$2" ] && { fail "$T_REMOTE_NAME_REQUIRED"; return 1; }
-                validate_arg "$2" "remote name" || return 1
-                run_git remote remove "$2" && ok "$(printf "$T_REMOTE_DELETED" "$2")" ;;
-        *)      fail "$T_USAGE_REMOTE" ;;
+        show)   git remote -v | mask_url ;;
+        add)    { [ -n "$name" ] && [ -n "$url" ]; } || { fail "$T_USAGE_REMOTE"; return 1; }
+                validate_remote_name "$name" || return 1
+                validate_url "$url" || return 1
+                run_git remote add "$name" "$url" && ok "$(printf "$T_REMOTE_ADDED" "$name")" ;;
+        set)    { [ -n "$name" ] && [ -n "$url" ]; } || { fail "$T_USAGE_REMOTE"; return 1; }
+                validate_remote_name "$name" || return 1
+                validate_url "$url" || return 1
+                run_git remote set-url "$name" "$url" && ok "$(printf "$T_REMOTE_UPDATED" "$name")" ;;
+        delete) [ -n "$name" ] || { fail "$T_REMOTE_NAME_REQUIRED"; return 1; }
+                validate_remote_name "$name" || return 1
+                run_git remote remove "$name" && ok "$(printf "$T_REMOTE_DELETED" "$name")" ;;
+        *)      fail "$T_USAGE_REMOTE"; return 1 ;;
     esac
 }
 
 cmd_init() {
     local name="${1:-my-project}"
-    [ -d "$name" ] && { fail "$(printf "$T_FOLDER_EXISTS" "$name")"; return 1; }
-    mkdir -p "$name" || { fail "$T_CREATE_FOLDER_FAIL"; return 1; }
-    git -C "$name" init
-    echo "# $name" > "$name/README.md"
-    echo "node_modules/" > "$name/.gitignore"
-    run_git -C "$name" add -A
-    git -C "$name" commit -m "init: first commit" 2>/dev/null || info "Commit awal sudah ada, lanjutkan."
+    [[ "$name" =~ $RE_NAME ]] || { fail "$T_INVALID_INPUT"; return 1; }
+    if [ -e "$name" ]; then fail "$(printf "$T_FOLDER_EXISTS" "$name")"; return 1; fi
+    mkdir -p -- "$name" || { fail "$T_CREATE_FOLDER_FAIL"; return 1; }
+    git -C "$name" init -q || return 1
+    printf '# %s\n' "$name" > "$name/README.md"
+    printf 'node_modules/\n.env\n.env.*\n*.pem\n*.key\n' > "$name/.gitignore"
+    run_git -C "$name" add -A || return 1
+    run_git -C "$name" commit -q -m "init: first commit" \
+        || { fail "$T_COMMIT_FAILED (cek: gitflux config set user.name / user.email)"; return 1; }
     ok "$(printf "$T_REPO_INIT" "$name")"
 }
 
 cmd_branch() {
     check_git || return 1
+    local a="${2:-}" b="${3:-}"
     case "${1:-list}" in
         list)   git branch -a ;;
-        create) [ -z "$2" ] && { fail "$T_USAGE_BRANCH"; return 1; }
-                validate_arg "$2" "branch name" || return 1
-                run_git switch -c "$2" && ok "$(printf "$T_BRANCH_CREATED" "$2")" ;;
-        switch) [ -z "$2" ] && { fail "$T_USAGE_BRANCH"; return 1; }
-                validate_arg "$2" "branch name" || return 1
-                run_git switch "$2" && ok "$(printf "$T_BRANCH_SWITCHED" "$2")" ;;
-        delete) [ -z "$2" ] && { fail "$T_USAGE_BRANCH"; return 1; }
-                validate_arg "$2" "branch name" || return 1
-                run_git branch -d "$2" && ok "$(printf "$T_BRANCH_DELETED" "$2")" || fail "$T_BRANCH_DELETE_FAIL" ;;
-        rename) [ -z "$2" ] || [ -z "$3" ] && { fail "$T_USAGE_BRANCH"; return 1; }
-                validate_arg "$2" "old branch name" || return 1
-                validate_arg "$3" "new branch name" || return 1
-                run_git branch -m "$2" "$3" && ok "$(printf "$T_BRANCH_RENAMED" "$2" "$3")" ;;
-        *)      fail "$T_USAGE_BRANCH" ;;
+        create) [ -n "$a" ] || { fail "$T_USAGE_BRANCH"; return 1; }
+                validate_branch_name "$a" || return 1
+                run_git switch -c "$a" && ok "$(printf "$T_BRANCH_CREATED" "$a")" ;;
+        switch) [ -n "$a" ] || { fail "$T_USAGE_BRANCH"; return 1; }
+                validate_branch_name "$a" || return 1
+                run_git switch "$a" && ok "$(printf "$T_BRANCH_SWITCHED" "$a")" ;;
+        delete) [ -n "$a" ] || { fail "$T_USAGE_BRANCH"; return 1; }
+                validate_branch_name "$a" || return 1
+                if run_git branch -d "$a"; then ok "$(printf "$T_BRANCH_DELETED" "$a")"
+                else fail "$T_BRANCH_DELETE_FAIL"; return 1; fi ;;
+        rename) { [ -n "$a" ] && [ -n "$b" ]; } || { fail "$T_USAGE_BRANCH"; return 1; }
+                validate_branch_name "$a" || return 1
+                validate_branch_name "$b" || return 1
+                run_git branch -m "$a" "$b" && ok "$(printf "$T_BRANCH_RENAMED" "$a" "$b")" ;;
+        *)      fail "$T_USAGE_BRANCH"; return 1 ;;
     esac
 }
 
 cmd_merge() {
     check_git || return 1
-    [ -z "$1" ] && { fail "$T_USAGE_MERGE"; return 1; }
-    validate_arg "$1" "branch name" || return 1
-    run_git merge "$1" && ok "$T_MERGE_OK" || fail "$T_MERGE_CONFLICT"
+    local b="${1:-}"
+    [ -n "$b" ] || { fail "$T_USAGE_MERGE"; return 1; }
+    validate_rev "$b" || return 1
+    if run_git merge "$b"; then ok "$T_MERGE_OK"; return 0; fi
+    if [ -n "$(git ls-files -u)" ]; then fail "$T_MERGE_CONFLICT"; else fail "$T_MERGE_FAIL"; fi
+    return 1
 }
 
-cmd_fetch() { check_git || return 1; run_git fetch --all && ok "$T_FETCH_OK"; }
+cmd_fetch() { check_git || return 1; run_git fetch --all --prune && ok "$T_FETCH_OK"; }
 
 cmd_reset() {
     check_git || return 1
-    local mode="${1:-soft}"
-    local target="${2:-HEAD~1}"
-    validate_arg "$target" "commit reference" || return 1
+    local mode="${1:-soft}" target="${2:-}"
+    case "$mode" in
+        soft|hard) ;;
+        *) fail "$T_USAGE_RESET"; return 1 ;;
+    esac
+    if [ "$mode" = "hard" ] && [ -z "$target" ]; then fail "$T_NEED_TARGET"; return 1; fi
+    target="${target:-HEAD~1}"
+    validate_rev "$target" || return 1
 
-    if [ "$mode" = "hard" ] && ! confirm "$T_RESET_HARD_CONFIRM"; then
-        fail "$T_CANCEL"; return 1
+    if [ "$mode" = "hard" ]; then
+        info "-> $(git log --oneline -1 "$target")"
+        confirm "$T_RESET_HARD_CONFIRM" || { fail "$T_CANCEL"; return 1; }
     fi
 
     case "$mode" in
         soft) run_git reset --soft "$target" && ok "$(printf "$T_RESET_SOFT" "$target")" ;;
         hard) run_git reset --hard "$target" && ok "$(printf "$T_RESET_HARD" "$target")" ;;
-        *)    fail "$T_USAGE_RESET" ;;
     esac
 }
 
@@ -653,227 +880,320 @@ cmd_reflog() { check_git || return 1; git reflog -20; }
 cmd_squash() {
     check_git || return 1
     local n="${1:-2}"
-    [[ "$n" =~ ^[0-9]+$ ]] || { fail "$T_SQUASH_INVALID_N"; return 1; }
-    local total; total=$(git rev-list --count HEAD 2>/dev/null || echo 0)
-    if [ "$n" -gt "$total" ]; then
-        fail "$T_SQUASH_TOO_LARGE"
+    { [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 2 ]; } || { fail "$T_SQUASH_INVALID_N"; return 1; }
+    local total; total="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+    if [ "$n" -ge "$total" ]; then fail "$T_SQUASH_TOO_LARGE"; return 1; fi
+    if ! git diff --quiet || ! git diff --cached --quiet; then fail "$T_DIRTY"; return 1; fi
+
+    local msg
+    msg="$(printf 'squash: %s commits\n\n' "$n"; git log --format='- %s' -n "$n")"
+    run_git reset --soft "HEAD~$n" || return 1
+    if ! run_git commit -m "$msg"; then
+        git reset --soft ORIG_HEAD >/dev/null 2>&1 || true   # rollback
+        fail "$T_COMMIT_FAILED"
         return 1
     fi
-    git reset --soft HEAD~"$n" 2>/dev/null && git commit -m "squash: $n commits"
     ok "$T_SQUASH_DONE"
 }
 
 cmd_rebase() {
     check_git || return 1
-    local target="${1:-main}"
-    validate_arg "$target" "branch name" || return 1
-    run_git rebase "$target" && ok "$T_REBASE_DONE" || fail "$T_REBASE_CONFLICT"
+    local target="${1:-}"
+    if [ -z "$target" ]; then
+        if git rev-parse --verify -q main >/dev/null; then target="main"
+        elif git rev-parse --verify -q master >/dev/null; then target="master"
+        else target="main"; fi
+    fi
+    validate_rev "$target" || return 1
+    if run_git rebase "$target"; then ok "$T_REBASE_DONE"; return 0; fi
+    fail "$T_REBASE_CONFLICT"
+    return 1
 }
 
 cmd_cherrypick() {
     check_git || return 1
-    [ -z "$1" ] && { fail "$T_USAGE_CHERRY_PICK"; return 1; }
-    validate_arg "$1" "commit hash" || return 1
-    run_git cherry-pick "$1" && ok "$T_CHERRY_PICK_DONE"
+    local c="${1:-}"
+    [ -n "$c" ] || { fail "$T_USAGE_CHERRY_PICK"; return 1; }
+    validate_rev "$c" || return 1
+    run_git cherry-pick "$c" && ok "$T_CHERRY_PICK_DONE"
 }
 
 cmd_bisect() {
     check_git || return 1
     case "${1:-start}" in
         start) run_git bisect start && ok "$T_BISECT_START" ;;
-        good)  validate_arg "${2:-HEAD}" "commit reference" || return 1
+        good)  validate_rev "${2:-HEAD}" || return 1
                run_git bisect good "${2:-HEAD}" && ok "$T_BISECT_GOOD" ;;
-        bad)   validate_arg "${2:-HEAD}" "commit reference" || return 1
+        bad)   validate_rev "${2:-HEAD}" || return 1
                run_git bisect bad "${2:-HEAD}" && ok "$T_BISECT_BAD" ;;
         reset) run_git bisect reset && ok "$T_BISECT_RESET" ;;
-        *)     fail "$T_USAGE_BISECT" ;;
+        *)     fail "$T_USAGE_BISECT"; return 1 ;;
     esac
 }
 
 # ==================== GITHUB API WRAPPERS ====================
 cmd_repo() {
-    [ -z "$1" ] && { fail "$T_USAGE_REPO"; return 1; }
-    validate_arg "$1" "repo name" || return 1
-    run_gh repo create "$1" --"${2:-public}" --clone && ok "$(printf "$T_REPO_CREATE_OK" "$1")" || fail "$T_REPO_CREATE_FAIL"
+    local name="${1:-}" vis="${2:-private}"      # default sekarang PRIVATE
+    [ -n "$name" ] || { fail "$T_USAGE_REPO"; return 1; }
+    [[ "$name" =~ $RE_REPO ]] || { fail "$T_INVALID_INPUT"; return 1; }
+    case "$vis" in public|private|internal) ;; *) fail "$T_USAGE_REPO"; return 1 ;; esac
+    if run_gh repo create "$name" "--$vis" --clone; then
+        ok "$(printf "$T_REPO_CREATE_OK" "$name")"
+    else
+        fail "$T_REPO_CREATE_FAIL"; return 1
+    fi
 }
 
 cmd_clone() {
-    [ -z "$1" ] && { fail "$T_USAGE_CLONE"; return 1; }
-    validate_arg "$1" "repo path" || return 1
-    run_gh repo clone "$1" && ok "$T_CLONE_OK" || fail "$T_CLONE_FAIL"
+    local r="${1:-}"
+    [ -n "$r" ] || { fail "$T_USAGE_CLONE"; return 1; }
+    [[ "$r" =~ $RE_REPO_FULL ]] || { fail "$T_INVALID_INPUT"; return 1; }
+    if run_gh repo clone "$r"; then ok "$T_CLONE_OK"; else fail "$T_CLONE_FAIL"; return 1; fi
 }
 
 cmd_gist() {
+    local a="${2:-}"
     case "${1:-list}" in
         list)   gh gist list ;;
-        create) [ -z "$2" ] && { fail "$T_USAGE_GIST"; return 1; }
-                validate_arg "$2" "file path" || return 1
-                run_gh gist create "$2" -d "Gist from Gitflux" && ok "$T_GIST_CREATED" ;;
-        edit)   [ -z "$2" ] && { fail "$T_USAGE_GIST"; return 1; }
-                validate_arg "$2" "gist ID" || return 1
-                run_gh gist edit "$2" && ok "$T_GIST_EDITED" ;;
-        delete) [ -z "$2" ] && { fail "$T_USAGE_GIST"; return 1; }
-                validate_arg "$2" "gist ID" || return 1
-                run_gh gist delete "$2" && ok "$T_GIST_DELETED" ;;
-        *)      fail "$T_USAGE_GIST" ;;
+        create) [ -n "$a" ] || { fail "$T_USAGE_GIST"; return 1; }
+                [[ "$a" == -* ]] && a="./$a"
+                [ -f "$a" ] || { fail "$(printf "$T_FILE_NOT_FOUND" "$a")"; return 1; }
+                if is_sensitive "$a"; then fail "$(printf "$T_SENSITIVE_REFUSE" "$a")"; return 1; fi
+                run_gh gist create "$a" -d "Gist from Gitflux" && ok "$T_GIST_CREATED" ;;
+        edit)   [ -n "$a" ] || { fail "$T_USAGE_GIST"; return 1; }
+                validate_id "$a" || return 1
+                run_gh gist edit "$a" && ok "$T_GIST_EDITED" ;;
+        delete) [ -n "$a" ] || { fail "$T_USAGE_GIST"; return 1; }
+                validate_id "$a" || return 1
+                confirm || { fail "$T_CANCEL"; return 1; }
+                run_gh gist delete "$a" && ok "$T_GIST_DELETED" ;;
+        *)      fail "$T_USAGE_GIST"; return 1 ;;
     esac
 }
 
 cmd_issue() {
+    local a="${2:-}"
     case "${1:-list}" in
         list)   gh issue list ;;
-        create) [ -z "$2" ] && { fail "$T_USAGE_ISSUE"; return 1; }
-                validate_arg "$2" "issue title" || return 1
-                run_gh issue create -t "$2" && ok "$T_ISSUE_CREATED" ;;
-        close)  [ -z "$2" ] && { fail "$T_USAGE_ISSUE"; return 1; }
-                validate_arg "$2" "issue number" || return 1
-                run_gh issue close "$2" && ok "$(printf "$T_ISSUE_CLOSED" "$2")" ;;
-        view)   [ -z "$2" ] && { fail "$T_USAGE_ISSUE"; return 1; }
-                validate_arg "$2" "issue number" || return 1
-                gh issue view "$2" ;;
-        *)      fail "$T_USAGE_ISSUE" ;;
+        create) [ -n "$a" ] || { fail "$T_USAGE_ISSUE"; return 1; }
+                validate_text "$a" "issue title" || return 1
+                run_gh issue create -t "$a" && ok "$T_ISSUE_CREATED" ;;
+        close)  [ -n "$a" ] || { fail "$T_USAGE_ISSUE"; return 1; }
+                validate_number "$a" || return 1
+                run_gh issue close "$a" && ok "$(printf "$T_ISSUE_CLOSED" "$a")" ;;
+        view)   [ -n "$a" ] || { fail "$T_USAGE_ISSUE"; return 1; }
+                validate_number "$a" || return 1
+                gh issue view "$a" ;;
+        *)      fail "$T_USAGE_ISSUE"; return 1 ;;
     esac
 }
 
 cmd_pr() {
+    local a="${2:-}"
     case "${1:-list}" in
         list)     gh pr list ;;
-        create)   [ -z "$2" ] && { fail "$T_USAGE_PR"; return 1; }
-                  validate_arg "$2" "PR title" || return 1
-                  run_gh pr create -t "$2" && ok "$T_PR_CREATED" ;;
-        merge)    [ -z "$2" ] && { fail "$T_USAGE_PR"; return 1; }
-                  validate_arg "$2" "PR number" || return 1
-                  run_gh pr merge "$2" && ok "$(printf "$T_PR_MERGED" "$2")" ;;
-        checkout) [ -z "$2" ] && { fail "$T_USAGE_PR"; return 1; }
-                  validate_arg "$2" "PR number" || return 1
-                  run_gh pr checkout "$2" && ok "$(printf "$T_PR_CHECKOUT" "$2")" ;;
-        review)   [ -z "$2" ] && { fail "$T_USAGE_PR"; return 1; }
-                  validate_arg "$2" "PR number" || return 1
-                  run_gh pr review "$2" && ok "$(printf "$T_PR_REVIEWED" "$2")" ;;
-        *)        fail "$T_USAGE_PR" ;;
+        create)   [ -n "$a" ] || { fail "$T_USAGE_PR"; return 1; }
+                  validate_text "$a" "PR title" || return 1
+                  run_gh pr create -t "$a" && ok "$T_PR_CREATED" ;;
+        merge)    [ -n "$a" ] || { fail "$T_USAGE_PR"; return 1; }
+                  validate_number "$a" || return 1
+                  run_gh pr merge "$a" && ok "$(printf "$T_PR_MERGED" "$a")" ;;
+        checkout) [ -n "$a" ] || { fail "$T_USAGE_PR"; return 1; }
+                  validate_number "$a" || return 1
+                  run_gh pr checkout "$a" && ok "$(printf "$T_PR_CHECKOUT" "$a")" ;;
+        review)   [ -n "$a" ] || { fail "$T_USAGE_PR"; return 1; }
+                  validate_number "$a" || return 1
+                  run_gh pr review "$a" && ok "$(printf "$T_PR_REVIEWED" "$a")" ;;
+        *)        fail "$T_USAGE_PR"; return 1 ;;
     esac
 }
 
 cmd_release() {
+    local a="${2:-}"
     case "${1:-list}" in
         list)   gh release list ;;
-        create) [ -z "$2" ] && { fail "$T_USAGE_RELEASE"; return 1; }
-                validate_arg "$2" "tag name" || return 1
-                run_gh release create "$2" && ok "$(printf "$T_RELEASE_CREATED" "$2")" ;;
-        delete) [ -z "$2" ] && { fail "$T_USAGE_RELEASE"; return 1; }
-                validate_arg "$2" "tag name" || return 1
-                run_gh release delete "$2" && ok "$(printf "$T_RELEASE_DELETED" "$2")" ;;
-        *)      fail "$T_USAGE_RELEASE" ;;
+        create) [ -n "$a" ] || { fail "$T_USAGE_RELEASE"; return 1; }
+                validate_tag_name "$a" || return 1
+                run_gh release create "$a" && ok "$(printf "$T_RELEASE_CREATED" "$a")" ;;
+        delete) [ -n "$a" ] || { fail "$T_USAGE_RELEASE"; return 1; }
+                validate_tag_name "$a" || return 1
+                run_gh release delete "$a" && ok "$(printf "$T_RELEASE_DELETED" "$a")" ;;
+        *)      fail "$T_USAGE_RELEASE"; return 1 ;;
     esac
 }
 
 cmd_actions() {
+    local a="${2:-}" re='^[A-Za-z0-9][A-Za-z0-9 ._/-]*$'
     case "${1:-list}" in
         list)    gh run list ;;
-        watch)   [ -z "$2" ] && { fail "$T_USAGE_ACTIONS"; return 1; }
-                 validate_arg "$2" "run ID" || return 1
-                 run_gh run watch "$2" && ok "$(printf "$T_ACTIONS_WATCH" "$2")" ;;
-        trigger) [ -z "$2" ] && { fail "$T_USAGE_ACTIONS"; return 1; }
-                 validate_arg "$2" "workflow name" || return 1
-                 run_gh workflow run "$2" && ok "$(printf "$T_ACTIONS_TRIGGER" "$2")" ;;
-        *)       fail "$T_USAGE_ACTIONS" ;;
+        watch)   [ -n "$a" ] || { fail "$T_USAGE_ACTIONS"; return 1; }
+                 validate_number "$a" || return 1
+                 run_gh run watch "$a" && ok "$(printf "$T_ACTIONS_WATCH" "$a")" ;;
+        trigger) [ -n "$a" ] || { fail "$T_USAGE_ACTIONS"; return 1; }
+                 [[ "$a" =~ $re ]] || { fail "$T_INVALID_INPUT"; return 1; }
+                 run_gh workflow run "$a" && ok "$(printf "$T_ACTIONS_TRIGGER" "$a")" ;;
+        *)       fail "$T_USAGE_ACTIONS"; return 1 ;;
     esac
 }
 
 # ==================== BACKUP ====================
 cmd_backup() {
-    local dest="${1:-$HOME/gitflux-backups}"
-    mkdir -p "$dest"
+    local dest="${1:-$HOME/gitflux-backups}" max_jobs=4
+    local -a pids=()
+    local r dir p failed=0
+    mkdir -p -- "$dest"
     info "$(printf "$T_BACKUP_START" "$dest")"
-    gh repo list --json nameWithOwner --jq '.[].nameWithOwner' | while IFS= read -r r; do
-        dir="$dest/$(echo "$r" | cut -d/ -f2)"
-        if [ -d "$dir" ]; then
-            git -C "$dir" pull &>/dev/null || true
-        else
-            gh repo clone "$r" "$dir" &>/dev/null || true
-        fi &
+
+    # process substitution: loop berjalan di shell utama, jadi `wait` benar-benar menunggu
+    while IFS= read -r r; do
+        [ -n "$r" ] || continue
+        dir="$dest/${r#*/}"
+        while [ "$(jobs -rp | wc -l | tr -d ' ')" -ge "$max_jobs" ]; do sleep 1; done
+        (
+            if [ -d "$dir/.git" ]; then
+                git -C "$dir" fetch --all --prune --quiet && git -C "$dir" pull --ff-only --quiet
+            else
+                gh repo clone "$r" "$dir" -- --quiet
+            fi
+        ) &
+        pids+=("$!")
+    done < <(gh repo list --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')
+
+    for p in ${pids[@]+"${pids[@]}"}; do
+        wait "$p" || failed=$((failed + 1))
     done
-    wait
+
+    if [ "$failed" -gt 0 ]; then
+        fail "$(printf "$T_BACKUP_FAILED" "$failed")"
+        return 1
+    fi
     ok "$T_BACKUP_DONE"
 }
 
 cmd_stats() {
     check_git || return 1
-    echo "$(printf "$T_STATS_COMMIT_BY" "$(git config user.name)")"
-    git shortlog -sn --all | head -10
+    echo "$T_STATS_TOP"
+    git shortlog -sn --all | head -10 || true
     echo "$T_STATS_LINES"
-    git ls-files | xargs wc -l 2>/dev/null | tail -1
+    if [ -n "$(git ls-files | head -n 1)" ]; then
+        git ls-files -z | xargs -0 cat 2>/dev/null | wc -l | tr -d ' ' || true
+    else
+        echo 0
+    fi
     echo "$T_STATS_LANG"
-    git ls-files | sed 's/.*\.//' | sort | uniq -c | sort -rn | head -5
+    git ls-files | awk -F/ '{n=$NF} n ~ /\.[^.]+$/ {sub(/.*\./,"",n); c[n]++} END{for(k in c) print c[k], k}' \
+        | sort -rn | head -5 || true
 }
 
-# Daemon dengan lockfile yang benar
+# Daemon: lock atomik (mkdir) per-repo, di direktori privat user
 cmd_daemon() {
-    if [ -f "$LOCKFILE" ]; then
-        local pid
-        pid="$(cat "$LOCKFILE" 2>/dev/null)"
+    check_git || return 1
+    local int="${1:-600}"
+    { [[ "$int" =~ ^[0-9]+$ ]] && [ "$int" -ge 1 ]; } || { fail "$T_BAD_INTERVAL"; return 1; }
+
+    local base="${XDG_RUNTIME_DIR:-$HOME/.cache/gitflux}" key pid
+    mkdir -p -- "$base" && chmod 700 "$base"
+    key="$(git rev-parse --show-toplevel | cksum | cut -d' ' -f1)"
+    DAEMON_LOCK="$base/daemon-$key.lock"
+
+    if ! mkdir "$DAEMON_LOCK" 2>/dev/null; then
+        pid="$(cat "$DAEMON_LOCK/pid" 2>/dev/null || true)"
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             fail "$T_DAEMON_ALREADY"
-            exit 1
+            return 1
         fi
-        rm -f "$LOCKFILE"
+        rm -rf -- "$DAEMON_LOCK"                     # lock basi
+        mkdir "$DAEMON_LOCK" 2>/dev/null || { fail "$T_DAEMON_ALREADY"; return 1; }
     fi
-    echo $$ > "$LOCKFILE"
-    trap 'rm -f "$LOCKFILE"' EXIT
+    echo $$ > "$DAEMON_LOCK/pid"
+    trap 'rm -rf -- "$DAEMON_LOCK"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
 
-    local int="${1:-600}"
+    GITFLUX_INTERACTIVE=no       # daemon tidak boleh meminta konfirmasi
     info "$(printf "$T_DAEMON_START" "$int")"
-    while true; do cmd_sync; sleep "$int"; done
+    while true; do
+        cmd_sync || true         # kegagalan satu siklus tidak mematikan daemon
+        sleep "$int"
+    done
 }
 
 cmd_webhook() {
-    [ -z "${WEBHOOK_URL:-}" ] && { fail "$T_WEBHOOK_URL_NOT_SET"; return 1; }
-    curl -s -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" \
-      -d '{"event":"ping","tool":"gitflux","timestamp":"'"$(date -Iseconds)"'"}' && ok "$T_WEBHOOK_OK" || fail "$T_WEBHOOK_FAIL"
+    local url="${WEBHOOK_URL:-}" re='^https://[^[:space:]"\\]+$'
+    [ -n "$url" ] || { fail "$T_WEBHOOK_URL_NOT_SET"; return 1; }
+    [[ "$url" =~ $re ]] || { fail "$T_BAD_URL"; return 1; }
+    local ts; ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"     # portable (GNU/BSD)
+    # URL lewat stdin (-K -) agar token tidak terlihat di `ps`
+    if printf 'url = "%s"\n' "$url" | curl -fsS --max-time 10 \
+            --proto '=https' --proto-redir '=https' -K - \
+            -H "Content-Type: application/json" \
+            -d "{\"event\":\"ping\",\"tool\":\"gitflux\",\"timestamp\":\"$ts\"}" -o /dev/null; then
+        ok "$T_WEBHOOK_OK"
+    else
+        fail "$T_WEBHOOK_FAIL"; return 1
+    fi
 }
 
 cmd_keygen() {
     local email="${1:-gitflux@termux.local}"
-    local key="$HOME/.ssh/id_ed25519_gitflux"
-    mkdir -p "$HOME/.ssh"
-    ssh-keygen -t ed25519 -C "$email" -f "$key" -N "" -q && ok "$(printf "$T_KEYGEN_OK" "$key")" || fail "$T_KEYGEN_FAIL"
-    info "Public key:"
-    cat "$key.pub"
+    local dir="$HOME/.ssh" key="$HOME/.ssh/id_ed25519_gitflux"
+    validate_text "$email" "email" || return 1
+    mkdir -p -- "$dir" && chmod 700 "$dir"
+    if [ -e "$key" ] || [ -e "$key.pub" ]; then
+        fail "$(printf "$T_KEY_EXISTS" "$key")"
+        return 1
+    fi
+    # Tanpa -N "": ssh-keygen menanyakan passphrase (disarankan diisi)
+    if (umask 077; ssh-keygen -t ed25519 -C "$email" -f "$key"); then
+        ok "$(printf "$T_KEYGEN_OK" "$key")"
+        info "Public key:"
+        cat -- "$key.pub"
+        info "Tambahkan ke GitHub: gh ssh-key add \"$key.pub\""
+    else
+        fail "$T_KEYGEN_FAIL"; return 1
+    fi
 }
 
 cmd_config() {
     case "${1:-show}" in
-        show)   git config --list ;;
-        set)    if [ $# -lt 3 ]; then
-                    fail "$T_USAGE_CONFIG"
-                    return 1
+        show)   git config --list | mask_url ;;
+        set)    [ $# -ge 3 ] || { fail "$T_USAGE_CONFIG"; return 1; }
+                # Allowlist: cegah injeksi core.sshCommand / alias.* / core.editor, dll.
+                case "$2" in
+                    user.name|user.email|user.signingkey|init.defaultBranch|pull.rebase|push.autoSetupRemote|core.autocrlf|commit.gpgsign) ;;
+                    *) fail "$(printf "$T_KEY_NOT_ALLOWED" "$2")"; return 1 ;;
+                esac
+                validate_text "$3" "config value" || return 1
+                if run_git config --global "$2" "$3"; then ok "$(printf "$T_CONFIG_SET" "$2" "$3")"
+                else fail "$(printf "$T_CONFIG_SET_FAIL" "$2")"; return 1; fi ;;
+        remote) check_git || return 1
+                local url="${2:-}"
+                [ -n "$url" ] || { fail "$T_USAGE_CONFIG"; return 1; }
+                validate_url "$url" || return 1
+                if git remote get-url origin >/dev/null 2>&1; then
+                    run_git remote set-url origin "$url" || return 1
+                else
+                    run_git remote add origin "$url" || return 1
                 fi
-                validate_arg "$2" "config key" || return 1
-                validate_arg "$3" "config value" || return 1
-                run_git config --global "$2" "$3" && ok "$(printf "$T_CONFIG_SET" "$2" "$3")" || fail "$(printf "$T_CONFIG_SET_FAIL" "$2")"
-                ;;
-        remote) [ -z "$2" ] && { fail "$T_USAGE_CONFIG"; return 1; }
-                validate_arg "$2" "remote URL" || return 1
-                git remote add origin "$2" 2>/dev/null || git remote set-url origin "$2"
                 ok "$T_CONFIG_REMOTE_OK" ;;
-        *)      fail "$T_USAGE_CONFIG" ;;
+        *)      fail "$T_USAGE_CONFIG"; return 1 ;;
     esac
 }
 
-# Undo dengan git restore
 cmd_undo() {
     check_git || return 1
+    local a="${2:-}"
     case "${1:-commit}" in
         commit) run_git reset --soft HEAD~1 && ok "$T_UNDO_COMMIT" ;;
-        file)   [ -z "$2" ] && { fail "$T_USAGE_UNDO"; return 1; }
-                validate_arg "$2" "file name" || return 1
-                run_git restore -- "$2" && ok "$(printf "$T_UNDO_FILE" "$2")" ;;
+        file)   [ -n "$a" ] || { fail "$T_USAGE_UNDO"; return 1; }
+                validate_text "$a" "file name" || return 1
+                run_git restore -- "$a" && ok "$(printf "$T_UNDO_FILE" "$a")" ;;
         hard)   if confirm "$T_UNDO_HARD_CONFIRM"; then
                     run_git reset --hard HEAD && ok "$T_UNDO_HARD"
                 else
                     fail "$T_CANCEL"; return 1
                 fi ;;
-        *)      fail "$T_USAGE_UNDO" ;;
+        *)      fail "$T_USAGE_UNDO"; return 1 ;;
     esac
 }
 
@@ -1076,8 +1396,20 @@ cmd_help() {
 
 # ==================== MAIN DISPATCHER ====================
 main() {
-    banner
-    case "${1:-help}" in
+    local cmd="${1:-help}"
+    if [ -t 1 ]; then banner; fi     # banner hanya di terminal (tidak merusak pipe)
+
+    case "$cmd" in
+        help|--help|-h|setup) ;;
+        *) need git || return 1 ;;
+    esac
+    case "$cmd" in
+        repo|clone|gist|issue|pr|release|actions|backup) need_gh || return 1 ;;
+        webhook) need curl || return 1 ;;
+        keygen)  need ssh-keygen || return 1 ;;
+    esac
+
+    case "$cmd" in
         deploy)       shift; cmd_deploy "$@" ;;
         push)         shift; cmd_push "$@" ;;
         pull)         shift; cmd_pull "$@" ;;
@@ -1114,7 +1446,7 @@ main() {
         undo)         shift; cmd_undo "$@" ;;
         setup)        shift; cmd_setup "$@" ;;
         help|--help|-h) cmd_help ;;
-        *)            fail "$T_FAIL_UNKNOWN $1" ; info "$T_HELP_LINE" ;;
+        *)            fail "$T_FAIL_UNKNOWN $cmd"; info "$T_HELP_LINE"; return 1 ;;
     esac
 }
 
